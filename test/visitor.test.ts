@@ -7,6 +7,7 @@ import postcss, {
   Rule,
   Declaration,
   Plugin,
+  PluginConstructor,
   PluginCreator,
   AnyNode,
   Helpers
@@ -343,6 +344,59 @@ it('wraps node to proxies', () => {
   let props: string[] = []
   proxy.walkDecls((decl: Declaration) => props.push(decl.prop))
   expect(props).toEqual(['color'])
+})
+
+it('supports a class plugin', async () => {
+  let didRunConstructor = false
+
+  type PostCSSPluginOptions = {
+    shouldRunConstructor: boolean
+  } | void
+
+  let PostCSSPlugin = class PostCSSPlugin {
+    constructor (
+      { shouldRunConstructor }: PostCSSPluginOptions = {
+        shouldRunConstructor: true
+      }
+    ) {
+      didRunConstructor = shouldRunConstructor
+    }
+
+    get postcssPlugin () {
+      return 'replace-color'
+    }
+
+    Declaration (decl: Declaration) {
+      if (decl.prop === 'color') {
+        decl.value = 'green'
+      }
+    }
+
+    static get postcss () {
+      return true
+    }
+  }
+
+  let css
+
+  didRunConstructor = false
+  ;({ css } = await postcss([
+    new PostCSSPlugin({ shouldRunConstructor: true })
+  ]).process('.a{ color: red; } ' + '.b{ will-change: transform; }', {
+    from: 'a.css'
+  }))
+  expect(didRunConstructor).toEqual(true)
+  expect(css).toEqual('.a{ color: green; } ' + '.b{ will-change: transform; }')
+
+  didRunConstructor = false
+  ;({ css } = await postcss([PostCSSPlugin]).process(
+    '.a{ color: red; } ' + '.b{ will-change: transform; }',
+    {
+      from: 'a.css'
+    }
+  ))
+  expect(didRunConstructor).toEqual(true)
+  expect(css).toEqual('.a{ color: green; } ' + '.b{ will-change: transform; }')
 })
 
 const cssThree = '.a{ color: red; } .b{ will-change: transform; }'
